@@ -22,8 +22,8 @@ See `docs/diagrams/software-arch.mermaid` for the full diagram. Key containers:
 - **API** (Nest.js) → business rules, auth, reads/writes DB, uploads to storage, publishes jobs to queue, sends emails
 - **Video Worker** (FFmpeg) → consumes jobs from queue, processes videos, updates DB and storage
 - **Database** (PostgreSQL) → users, channels, videos, comments, likes
-- **Object Storage** (S3/MinIO) → video files and thumbnails
-- **Message Queue** (TBD) → video processing job queue
+- **Object Storage** (MinIO, S3-compatible) → video files and thumbnails
+- **Message Queue** (BullMQ over PostgreSQL) → video processing job queue
 - **Email Service** (SMTP) → account confirmation and password recovery
 
 ## Docker Networking
@@ -36,6 +36,34 @@ Inside a container, `localhost` refers to the container itself, not the host mac
 - **Wrong:** `DB_HOST=localhost`
 
 This applies to all environment variables, configuration files, and code that references service hosts.
+
+## Video Module (Phase 03)
+
+Upload and processing of videos. Videos belong to a channel; the pipeline keeps the API off the data path for large (up to 10GB) uploads.
+
+**Module:** `nestjs-project/src/videos/` — `VideosModule` (entity `Video` linked to `Channel`, `VideosService`, `VideosUploadService`, controllers, `guards/video-owner.guard.ts`, `processing/` with `FfmpegService` + `VideoProcessor`).
+
+**Endpoints** (all JWT-protected):
+
+| Method & Route | Description |
+|---|---|
+| `POST /videos/uploads` | Pre-registers the video as a draft and opens the S3 multipart upload |
+| `GET /videos/uploads/:uploadId/parts/:partNumber` | Presigns one `UploadPart` request (moves the video to `UPLOADING` on the first part) |
+| `POST /videos/uploads/:uploadId/complete` | Finalizes the multipart upload and enqueues the processing job |
+| `DELETE /videos/uploads/:uploadId` | Aborts the multipart upload |
+| `GET /videos/:publicSlug` | Video pipeline status + extracted metadata |
+| `GET /videos/:publicSlug/playback` | Mints a short-lived presigned `GetObject` URL for streaming (video must be `READY`) |
+| `GET /videos/:publicSlug/download` | Mints a presigned URL with `Content-Disposition` so the browser saves the file |
+
+**Status lifecycle:** `PENDING_UPLOAD → UPLOADING → PROCESSING → READY | FAILED`, persisted on the `videos` table.
+
+**Upload strategy:** the client uploads parts **directly to MinIO** via presigned multipart URLs — the file never streams through the API. Each video has a unique `publicSlug` (unique constraint + index).
+
+**Storage:** MinIO (S3-compatible, `minio` Compose service; swappable for S3 in prod). Object keys/buckets for the video file and the generated thumbnail.
+
+**Queue:** BullMQ using the **PostgreSQL backend** (`createPostgresBackend`) — no Redis. The API publishes a `video` processing job on upload completion.
+
+**Worker:** the `video-worker` Compose service runs `npm run start:dev:worker` (`src/main.worker.ts` → `WorkerModule`), a headless Nest context (no HTTP listener) that consumes the `video` queue and runs FFmpeg/ffprobe to extract duration/metadata and generate a thumbnail, then updates the DB and storage. It starts automatically with `docker compose up`.
 
 ## Working Principles
 

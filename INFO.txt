@@ -1,0 +1,101 @@
+# StreamTube — Fase 03: Upload e Processamento de Vídeos (guia de execução)
+
+## Objetivo
+Entregar a Fase 03 completa em um fork público do mba-ia-greenfield-project: módulo de vídeos no backend + infra nova (object storage, fila, worker FFmpeg) subindo via Docker + os artefatos do workflow. Desafio de backend; o vídeo no frontend está fora do escopo.
+
+## Já existe / vou construir
+Existe (Fases 01–02 fechadas):
+- NestJS 11 + TypeORM + PostgreSQL 17 em `nestjs-project/`; módulos `auth/`, `users/`, `channels/`, `mail/`, `common/`, `config/`, `database/`, `swagger/`.
+- Guard JWT global, filtro de exceções de domínio, ValidationPipe global, rate limiting, migrations versionadas e seeds.
+- Cada usuário tem um canal (1:1) criado no cadastro. Os vídeos pertencem a um canal.
+- `compose.yaml` atual: só API, PostgreSQL e Mailpit.
+
+Vou construir:
+- Módulo de vídeo, tabela de vídeos (ligada ao canal), serviço de object storage, fila de processamento e worker de vídeo (FFmpeg). A arquitetura-alvo já prevê os três.
+
+## Decisões de research (o coração — decidir e justificar)
+Salvar em `docs/decisions/technical-decisions-phase-03-videos.md` (formato: opções, trade-offs, recomendação por decisão).
+- [ ] **Fila** — TBD no plano; é a principal decisão de stack da fase.
+- [ ] **Estratégia de upload de 10GB** sem travar (ex.: upload direto ao storage via URL pré-assinada / multipart, sem passar o arquivo pela API).
+- [ ] **Worker** — como roda (processo/container separado) + extração de metadados e geração de thumbnail (FFmpeg/ffprobe).
+- [ ] **URL única + streaming** (ex.: requisições com range / 206 Partial Content).
+- [ ] **Ciclo de status** do vídeo e o que acontece em caso de falha no processamento.
+
+> Object storage NÃO é decisão aberta: o projeto aponta pra S3 (compatível) → rodar **MinIO** local em Docker, trocável por S3 em prod. Aqui decide-se só o **uso** (organização de buckets/chaves, upload pré-assinado), não qual storage.
+
+## Workflow (pipeline — cada etapa gera artefato)
+- [ ] `research` → `docs/decisions/technical-decisions-phase-03-videos.md`
+- [ ] `plan-context` → `context.md`
+- [ ] `plan-validate` → `validation.md` (precisa fechar em **clean**)
+- [ ] `plan-resolve` → resolve pendências + `library-refs.md` (libs confirmadas via context7)
+- [ ] `plan-build` → `phase-03-videos.md` (SI-03.x + Technical Specs + Dependency Map + Deliverables)
+- [ ] `plan-test-specs` (opcional) → specs de teste
+- [ ] `implement` → código + `progress.md`
+
+Iterar `validate ↔ resolve` até ficar **clean**. Plano frouxo gera implementação frouxa.
+
+Pasta da fase (contrato de entrega, formato de referência = `phase-02-auth/`):
+`docs/phases/phase-03-videos/` → `context.md`, `validation.md`, `library-refs.md`, `phase-03-videos.md`, `progress.md`.
+
+O plano precisa ter: **SIs** `SI-03.x`, **Technical Specifications** (Data Model, API Contracts, Authorization Matrix, Error Catalog, **Events/Messages** por causa da fila), **Dependency Map** e **Deliverables**.
+
+## Escopo da feature (capacidades a entregar)
+- [ ] Object storage para vídeos e thumbnails
+- [ ] Fila de processamento + worker que a consome
+- [ ] Upload de até 10GB sem travar a API (sem segurar a API durante o envio)
+- [ ] Pré-cadastro automático do vídeo como rascunho ao iniciar o upload
+- [ ] Processamento automático após upload: extração de duração e metadados
+- [ ] Geração automática de thumbnail a partir de um frame
+- [ ] URL única por vídeo, sem conflito
+- [ ] Reprodução via streaming (sem exigir download completo)
+- [ ] Download do vídeo pelo usuário
+
+Persistência: entidade/tabela de vídeos ligada ao canal, com pelo menos — id, dono (canal), título, status (rascunho → processando → pronto/erro), chaves de storage do arquivo e do thumbnail, duração, metadados e o id da URL única. Modelo exato definido no Data Model do plano.
+
+## Regras (do CLAUDE.md, valem nesta fase)
+- **Docker:** host = nome do serviço do Compose (ex.: `db`), nunca `localhost`.
+- **Libs:** antes de implementar com qualquer biblioteca, consultar a doc oficial via **context7 (MCP)** e seguir a versão instalada.
+- **Git Flow:** branches `feature/*` saem da `dev` e voltam pra `dev`; nunca commitar direto na `main`. Commits curtos e descritivos.
+- **Testes:** `*.spec.ts` (unit), `*.integration-spec.ts` (integração com banco/serviços reais), `*.e2e-spec.ts` (e2e via supertest). Não mockar o que dá pra testar de verdade com a infra do Compose.
+- **Rastreabilidade:** tudo nos artefatos deve vir do plano ou do código. Não inventar requisitos, decisões ou comportamentos.
+
+## Definition of Done
+- [ ] Suíte relevante verde (unit + integração + e2e)
+- [ ] Suíte completa verde (`npm test` e `npm run test:e2e`)
+- [ ] `npx tsc --noEmit` sai com código 0
+- [ ] `npm run lint` passa
+
+## Critérios de Aceite (régua única de avaliação)
+Decisões e planejamento
+- [ ] `technical-decisions-phase-03-videos.md` com as decisões abertas resolvidas e justificadas (fila, upload, streaming, processamento/thumbnail, ciclo de status)
+- [ ] Pasta `docs/phases/phase-03-videos/` com `context.md`, `validation.md` (status **clean**), `phase-03-videos.md`, `progress.md` e `library-refs.md`
+- [ ] Plano no formato do projeto: SIs `SI-03.x`, Technical Specs (Data Model, API Contracts, Authorization Matrix, Error Catalog, Events/Messages), Dependency Map e Deliverables
+
+Feature
+- [ ] Upload de até 10GB sem travar a API, com pré-cadastro do vídeo como rascunho ao iniciar
+- [ ] Processamento automático após upload: duração/metadados + geração de thumbnail
+- [ ] URL única por vídeo, sem conflito
+- [ ] Streaming funcionando (sem exigir download completo) e download disponível
+- [ ] Ciclo de status (rascunho → processando → pronto/erro) refletido no banco
+
+Infraestrutura e qualidade
+- [ ] Object storage, fila e worker subindo via `docker compose` junto com o backend
+- [ ] Migration cria a tabela de vídeos; entidade ligada ao canal
+- [ ] Testes nos níveis adequados, verdes (`npm test` e `npm run test:e2e`)
+- [ ] DoD completa: suíte verde + `npx tsc --noEmit` (código 0) + `npm run lint`
+- [ ] Git Flow respeitado (trabalho em `feature/*` a partir de `dev`, sem commit na `main`)
+
+Documentação
+- [ ] `CLAUDE.md` atualizado com a seção de vídeos, coerente com o código (módulo, endpoints, fila/worker, storage)
+
+## Reprova automática (evitar)
+⛔ Pular o workflow: implementar sem as etapas de research, planejamento e implementação (e seus artefatos)
+⛔ Plano sem SIs ou sem as Technical Specifications, ou `validation.md` que não fecha em clean
+⛔ Passar o arquivo de 10GB pela API travando o sistema (sem upload assíncrono/direto)
+⛔ Não ter fila, worker e storage reais subindo no Compose
+⛔ `tsc` com erro, lint quebrado ou suíte vermelha
+⛔ Commit direto na `main`
+⛔ `CLAUDE.md` inconsistente com o código
+
+## Ordem sugerida
+Setup (subir backend, instalar deps, rodar migrations, confirmar suíte verde) → Research (fechar decisões abertas) → Planejamento (context → validate → resolve → build, até **clean**) → Implementação SI a SI (módulo, infra no Compose, migration, testes, `progress.md`) → Fechamento (DoD + atualizar `CLAUDE.md` + revisar Critérios de Aceite).
