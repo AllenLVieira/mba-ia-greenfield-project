@@ -45,9 +45,9 @@ O projeto é um monorepo baseado em containers Docker. Cada subprojeto sobe sua 
 - **API** (NestJS 11) — regras de negócio, autenticação (JWT + refresh token rotation), envio de e-mails e acesso ao banco.
 - **Database** (PostgreSQL 17) — usuários, canais e tokens de autenticação.
 - **Email Service** (Mailpit) — captura os e-mails transacionais (confirmação de conta e recuperação de senha) em uma UI local.
-- **Video Worker** (FFmpeg) — processamento de vídeos *(planejado — Fase 03)*.
-- **Object Storage** (S3/MinIO) — arquivos de vídeo e thumbnails *(planejado — Fase 03)*.
-- **Message Queue** — fila de processamento de vídeos *(planejado — Fase 03)*.
+- **Video Worker** (FFmpeg) — container separado que consome a fila e processa os vídeos (extração de duração/metadados + geração de thumbnail).
+- **Object Storage** (MinIO, compatível com S3) — arquivos de vídeo e thumbnails; upload direto via URLs pré-assinadas (multipart).
+- **Message Queue** (BullMQ sobre PostgreSQL) — fila de processamento de vídeos, sem Redis.
 
 O diagrama de arquitetura completo (C4) está em `docs/diagrams/software-arch.mermaid`.
 
@@ -60,7 +60,7 @@ Os dois subprojetos têm stacks Docker **separadas**. Suba primeiro o backend, r
 ```bash
 cd nestjs-project
 
-# Sobe API, banco e Mailpit
+# Sobe API, banco, Mailpit, MinIO (object storage) e o video-worker
 docker compose up -d
 
 # Instala dependências (apenas na primeira vez)
@@ -80,6 +80,8 @@ Serviços disponíveis:
 | API NestJS | http://localhost:3000 |
 | PostgreSQL | `localhost:5432` (db/user/senha: `streamtube`) |
 | Mailpit (UI de e-mails) | http://localhost:8025 |
+| MinIO (object storage) | API `http://localhost:9000` · Console `http://localhost:9001` (user/senha: `streamtube`) |
+| Video Worker | container `video-worker` — sobe junto e consome a fila de processamento |
 | Swagger (opcional) | http://localhost:3000/api/docs — habilite com `SWAGGER_ENABLED=true` |
 
 ### 2. Frontend (Next.js)
@@ -124,7 +126,7 @@ Sufixos: `*.test.ts(x)` (unitário), `*.integration.test.ts(x)` (Route Handlers 
 
 ## ✅ Funcionalidades implementadas
 
-**Fase 01 — Configuração base** e **Fase 02 — Autenticação** estão concluídas (backend + frontend).
+**Fase 01 — Configuração base** e **Fase 02 — Autenticação** estão concluídas (backend + frontend). **Fase 03 — Upload e Processamento de Vídeos** está concluída (backend).
 
 ### Autenticação (Fase 02)
 
@@ -150,6 +152,24 @@ Telas e Route Handlers BFF (`next-frontend`):
 - `app/api/auth/{signup,login,logout,forgot-password}` — proxy same-origin para a API.
 
 Segurança: senhas com **Argon2**, **JWT** com `JwtAuthGuard` global (opt-out via `@Public()`), **rotação de refresh token** com detecção de reuso, **rate limiting** (`ThrottlerGuard`) nos endpoints de auth, e sessão no navegador via **iron-session** (cookies HTTP-only).
+
+### Vídeos (Fase 03)
+
+Upload direto ao object storage (até 10GB, sem passar o arquivo pela API), processamento assíncrono e reprodução via streaming. O vídeo é pré-cadastrado como rascunho ao iniciar o upload e percorre o ciclo `PENDING_UPLOAD → UPLOADING → PROCESSING → READY | FAILED`.
+
+Endpoints da API (`nestjs-project`, todos protegidos por JWT):
+
+| Método & Rota | Descrição |
+|---------------|-----------|
+| `POST /videos/uploads` | Pré-cadastra o vídeo como rascunho e abre o multipart no storage |
+| `GET /videos/uploads/:uploadId/parts/:partNumber` | Assina uma parte do upload (vai para `UPLOADING` na primeira parte) |
+| `POST /videos/uploads/:uploadId/complete` | Finaliza o multipart e enfileira o job de processamento |
+| `DELETE /videos/uploads/:uploadId` | Aborta o upload multipart |
+| `GET /videos/:publicSlug` | Status do pipeline + metadados extraídos |
+| `GET /videos/:publicSlug/playback` | URL pré-assinada de streaming (vídeo precisa estar `READY`) |
+| `GET /videos/:publicSlug/download` | URL pré-assinada de download (`Content-Disposition`) |
+
+Infra: **MinIO** (object storage compatível com S3), fila **BullMQ sobre PostgreSQL** (sem Redis) e o container **`video-worker`** (FFmpeg/ffprobe) que consome a fila, extrai duração/metadados, gera o thumbnail e atualiza banco e storage. Storage, fila e worker sobem junto com o backend via `docker compose up`.
 
 ## 🛠️ Estrutura do Projeto
 
@@ -195,7 +215,7 @@ green-field-ia-project/
 |------|-----------|--------|
 | **01** | Configuração Base do Projeto | ✅ Concluída |
 | **02** | Cadastro, Login e Gerenciamento de Conta | ✅ Concluída |
-| **03** | Upload e Processamento de Vídeos | ⏳ Planejada |
+| **03** | Upload e Processamento de Vídeos | ✅ Concluída |
 | **04** | Gerenciamento de Vídeos e Canal | ⏳ Planejada |
 | **05** | Página de Visualização do Vídeo | ⏳ Planejada |
 | **06** | Interações Sociais (Likes, Comentários, Inscrições) | ⏳ Planejada |
