@@ -438,6 +438,520 @@
           "auth"
         ]
       }
+    },
+    "/videos/uploads": {
+      "post": {
+        "description": "Pre-registers the video as a draft and opens the S3 multipart upload.",
+        "operationId": "VideosUploadController_initiate",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InitiateUploadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Upload initiated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InitiateUploadResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Initiate a video upload",
+        "tags": [
+          "videos"
+        ]
+      }
+    },
+    "/videos/uploads/{uploadId}/parts/{partNumber}": {
+      "get": {
+        "description": "Presigns a single UploadPart request. Transitions the video to UPLOADING on the first part.",
+        "operationId": "VideosUploadController_signPart",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Presigned part URL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignPartResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller does not own the video behind uploadId",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "uploadId matches no open upload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The video is no longer PENDING_UPLOAD or UPLOADING",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Presign an upload part",
+        "tags": [
+          "videos"
+        ]
+      }
+    },
+    "/videos/uploads/{uploadId}/complete": {
+      "post": {
+        "description": "Finalizes the multipart upload and enqueues the processing job.",
+        "operationId": "VideosUploadController_complete",
+        "parameters": [
+          {
+            "name": "uploadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteUploadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Upload completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompleteUploadResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller does not own the video behind uploadId",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "uploadId matches no open upload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The video is no longer PENDING_UPLOAD or UPLOADING",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Complete a multipart upload",
+        "tags": [
+          "videos"
+        ]
+      }
+    },
+    "/videos/uploads/{uploadId}": {
+      "delete": {
+        "description": "Aborts the multipart upload, releasing the incomplete parts.",
+        "operationId": "VideosUploadController_abort",
+        "parameters": [
+          {
+            "name": "uploadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Upload aborted"
+          },
+          "401": {
+            "description": "Missing or invalid access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller does not own the video behind uploadId",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "uploadId matches no open upload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Abort a multipart upload",
+        "tags": [
+          "videos"
+        ]
+      }
+    },
+    "/videos/{publicSlug}": {
+      "get": {
+        "description": "Returns the video's pipeline state and extracted metadata.",
+        "operationId": "VideosController_getStatus",
+        "parameters": [
+          {
+            "name": "publicSlug",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Video status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoStatusResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller does not own this video",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "publicSlug matches no video",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Get video status",
+        "tags": [
+          "videos"
+        ]
+      }
+    },
+    "/videos/{publicSlug}/playback": {
+      "get": {
+        "description": "Mints a fresh short-lived presigned GetObject URL for streaming.",
+        "operationId": "VideosController_getPlaybackUrl",
+        "parameters": [
+          {
+            "name": "publicSlug",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Presigned playback URL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresignedUrlResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller does not own this video",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "publicSlug matches no video",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The video is not READY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Get a playback URL",
+        "tags": [
+          "videos"
+        ]
+      }
+    },
+    "/videos/{publicSlug}/download": {
+      "get": {
+        "description": "Mints a fresh short-lived presigned GetObject URL with a Content-Disposition override so the browser saves instead of streams.",
+        "operationId": "VideosController_getDownloadUrl",
+        "parameters": [
+          {
+            "name": "publicSlug",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Presigned download URL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresignedUrlResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller does not own this video",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "publicSlug matches no video",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The video is not READY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Get a download URL",
+        "tags": [
+          "videos"
+        ]
+      }
     }
   },
   "info": {
@@ -480,6 +994,167 @@
       "ResetPasswordDto": {
         "type": "object",
         "properties": {}
+      },
+      "InitiateUploadDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "InitiateUploadResponseDto": {
+        "type": "object",
+        "properties": {
+          "uploadId": {
+            "type": "string",
+            "description": "The S3 UploadId for the opened multipart upload"
+          },
+          "key": {
+            "type": "string",
+            "description": "The videoId-addressed ingest object key chosen by the API"
+          },
+          "publicSlug": {
+            "type": "string",
+            "description": "The 11-char public handle used by every subsequent video route"
+          }
+        },
+        "required": [
+          "uploadId",
+          "key",
+          "publicSlug"
+        ]
+      },
+      "SignPartResponseDto": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "Presigned UploadPart URL, signed for the browser"
+          },
+          "headers": {
+            "type": "object",
+            "description": "Headers the client must replay on the PUT",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "url",
+          "headers"
+        ]
+      },
+      "CompleteUploadDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CompleteUploadResponseDto": {
+        "type": "object",
+        "properties": {
+          "location": {
+            "type": "string",
+            "description": "The completed object location"
+          }
+        },
+        "required": [
+          "location"
+        ]
+      },
+      "ProcessingErrorDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "NO_VIDEO_STREAM"
+          },
+          "message": {
+            "type": "string",
+            "example": "The uploaded object contains no video stream"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ]
+      },
+      "VideoStatusResponseDto": {
+        "type": "object",
+        "properties": {
+          "publicSlug": {
+            "type": "string",
+            "description": "The 11-char public handle for this video"
+          },
+          "title": {
+            "type": "string"
+          },
+          "processingStatus": {
+            "type": "string",
+            "enum": [
+              "PENDING_UPLOAD",
+              "UPLOADING",
+              "PROCESSING",
+              "READY",
+              "FAILED"
+            ]
+          },
+          "processingError": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ProcessingErrorDto"
+              }
+            ]
+          },
+          "durationSeconds": {
+            "type": "object",
+            "nullable": true
+          },
+          "width": {
+            "type": "object",
+            "nullable": true
+          },
+          "height": {
+            "type": "object",
+            "nullable": true
+          },
+          "sizeBytes": {
+            "type": "string",
+            "description": "Declared and reconciled object size, in bytes"
+          },
+          "container": {
+            "type": "object",
+            "nullable": true
+          },
+          "videoCodec": {
+            "type": "object",
+            "nullable": true
+          },
+          "audioCodec": {
+            "type": "object",
+            "nullable": true
+          }
+        },
+        "required": [
+          "publicSlug",
+          "title",
+          "processingStatus",
+          "sizeBytes"
+        ]
+      },
+      "PresignedUrlResponseDto": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "Presigned GetObject URL against the media bucket"
+          },
+          "expiresIn": {
+            "type": "number",
+            "description": "TTL of the presigned URL, in seconds"
+          }
+        },
+        "required": [
+          "url",
+          "expiresIn"
+        ]
       },
       "ApiErrorEnvelope": {
         "type": "object",

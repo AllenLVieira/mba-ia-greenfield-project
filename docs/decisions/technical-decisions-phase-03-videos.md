@@ -224,6 +224,10 @@ _Subprojects in scope:_
 
 **Decision:** A (3 attempts + backoff, UnrecoverableError for deterministic failures, jobId = videoId)
 
+**Revisions:**
+
+- **2026-08-16:** Fixes the previously undetermined `processingError.code` for transient-failure retry exhaustion to `PROCESSING_FAILED`. Rationale: implementing SI-03.9's `VideoProcessor` requires a concrete string for `Video.processingError.code` when the job exhausts its 3-attempt retry budget without a deterministic (`NO_VIDEO_STREAM`-style) cause; `PROCESSING_FAILED` is a generic catch-all distinct from `NO_VIDEO_STREAM`, consistent with the existing `SCREAMING_SNAKE_CASE` convention used by every other code in the Error Catalog.
+
 ---
 
 ## TD-07: Where and How the Video Worker Runs
