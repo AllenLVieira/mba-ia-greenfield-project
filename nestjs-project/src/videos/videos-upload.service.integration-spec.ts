@@ -68,7 +68,11 @@ describe('VideosUploadService (integration)', () => {
 
   beforeEach(async () => {
     await cleanAllTables(dataSource);
-    await queue.drain(true);
+    // `drain` only clears waiting/delayed jobs; with `removeOnFail: false` and a
+    // live `video-worker` consuming the shared Postgres queue, failed jobs from
+    // prior runs pile up and inflate `getJobCounts`. `obliterate` wipes every
+    // state so this test only ever sees the single job it enqueues.
+    await queue.obliterate({ force: true });
   });
 
   let counter = 0;
